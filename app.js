@@ -1,16 +1,17 @@
 const API = "https://dimdimdigaana-be.onrender.com/api/users";
 
 async function createUser() {
-  const user = {
-    name: document.getElementById("name").value,
-    age: Number(document.getElementById("age").value),
+  const payload = {
+    username: document.getElementById("username").value,
+    firstName: document.getElementById("firstName").value,
+    lastName: document.getElementById("lastName").value,
     dob: document.getElementById("dob").value
   };
 
   await fetch(API, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(user)
+    body: JSON.stringify(payload)
   });
 
   loadUsers();
@@ -25,7 +26,7 @@ async function loadUsers() {
 
   users.forEach(u => {
     const li = document.createElement("li");
-    li.innerText = `${u.name} (${u.age}) - ${u.dob}`;
+    li.innerText = `${u.username} - ${u.firstName} ${u.lastName} (${u.dob})`;
     list.appendChild(li);
   });
 }

@@ -1,7 +1,10 @@
 "use client";
 import { deleteUser } from "@/lib/api";
+import { useBlockingCall } from "@/components/BlockingSpinner";
 
 export default function UserTable({ users, onRefresh }: any) {
+  const withBlocking = useBlockingCall();
+
   return (
     <table className="w-full border border-slate-800 rounded-xl overflow-hidden">
       <thead className="bg-slate-900">
@@ -20,10 +23,12 @@ export default function UserTable({ users, onRefresh }: any) {
             <td className="p-3">{u.dob}</td>
             <td className="p-3">
               <button
-                onClick={async () => {
-                  await deleteUser(u.id);
-                  onRefresh();
-                }}
+                onClick={() =>
+                  withBlocking(async () => {
+                    await deleteUser(u.id);
+                    await onRefresh();
+                  }, "Deleting user…")
+                }
                 className="text-red-400 hover:text-red-300"
               >
                 Delete

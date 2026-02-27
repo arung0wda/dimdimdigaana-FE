@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { createUser } from "@/lib/api";
+import { useBlockingCall } from "@/components/BlockingSpinner";
 
 export default function UserForm({ onCreated }: any) {
   const [form, setForm] = useState({
@@ -9,11 +10,14 @@ export default function UserForm({ onCreated }: any) {
     lastName: "",
     dob: ""
   });
+  const withBlocking = useBlockingCall();
 
   async function submit() {
-    await createUser(form);
-    setForm({ username: "", firstName: "", lastName: "", dob: "" });
-    onCreated();
+    await withBlocking(async () => {
+      await createUser(form);
+      setForm({ username: "", firstName: "", lastName: "", dob: "" });
+      await onCreated();
+    }, "Creating user…");
   }
 
   return (

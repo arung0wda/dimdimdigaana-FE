@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { getUsers } from "@/lib/api";
 import UserForm from "@/components/UserForm";
 import UserTable from "@/components/UserTable";
+import { BlockingProvider } from "@/components/BlockingSpinner";
 
 export default function Home() {
   const [users, setUsers] = useState([]);
@@ -16,9 +17,9 @@ export default function Home() {
   }, []);
 
   return (
-    <>
+    <BlockingProvider>
       <UserForm onCreated={load} />
       <UserTable users={users} onRefresh={load} />
-    </>
+    </BlockingProvider>
   );
 }

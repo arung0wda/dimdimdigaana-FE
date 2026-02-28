@@ -7,7 +7,7 @@ import UserSearch from "@/components/UserSearch";
 import { BlockingProvider } from "@/components/BlockingSpinner";
 
 export default function Home() {
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [isSearchActive, setIsSearchActive] = useState(false);
 
   async function load() {

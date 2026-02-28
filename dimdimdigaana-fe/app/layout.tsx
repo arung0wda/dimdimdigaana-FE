@@ -9,6 +9,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           DimDimDigaana Users
         </header>
         <main className="p-8 max-w-6xl mx-auto">{children}</main>
+        <SpeedInsights />
       </body>
     </html>
   );

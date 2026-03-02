@@ -1,21 +1,26 @@
 "use client";
 import { useEffect, useState } from "react";
-import { getUsers } from "@/lib/api";
+import { getUsers, User } from "@/lib/api";
 import UserForm from "@/components/UserForm";
 import UserTable from "@/components/UserTable";
 import UserSearch from "@/components/UserSearch";
-import { BlockingProvider } from "@/components/BlockingSpinner";
 
 export default function Home() {
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [isSearchActive, setIsSearchActive] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   async function load() {
-    setUsers(await getUsers());
-    setIsSearchActive(false);
+    setLoadError(null);
+    try {
+      setUsers(await getUsers());
+      setIsSearchActive(false);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "Failed to load users");
+    }
   }
 
-  function handleSearchResults(results: any[]) {
+  function handleSearchResults(results: User[]) {
     setUsers(results);
     setIsSearchActive(true);
   }
@@ -25,9 +30,12 @@ export default function Home() {
   }, []);
 
   return (
-    <BlockingProvider>
+    <>
       <UserForm onCreated={load} />
       <UserSearch onResults={handleSearchResults} />
+      {loadError && (
+        <p className="mb-4 text-sm text-red-400">{loadError}</p>
+      )}
       {isSearchActive && (
         <div className="mb-4 flex items-center gap-3">
           <span className="text-sm text-indigo-400">
@@ -42,6 +50,7 @@ export default function Home() {
         </div>
       )}
       <UserTable users={users} onRefresh={load} />
-    </BlockingProvider>
+    </>
   );
 }
+

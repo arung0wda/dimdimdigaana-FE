@@ -8,7 +8,7 @@ export default function RootLayout({children}: { children: React.ReactNode }) {
         <body className="bg-slate-950 text-slate-100 min-h-screen">
         <BlockingProvider>
             <header className="border-b border-slate-800 px-8 py-4 text-xl font-semibold">
-                DimDimDigaana Users
+                Dim Dim Digaana
             </header>
             <main className="p-8 max-w-6xl mx-auto">{children}</main>
         </BlockingProvider>

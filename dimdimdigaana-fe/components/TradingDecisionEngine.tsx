@@ -7,7 +7,6 @@ import { useState } from "react";
 type Bias = "" | "bull" | "bear";
 type RTO = "" | "green" | "red";
 type Session = "" | "yes" | "no";
-
 type Decision = "trade" | "wait" | "skip";
 
 interface Result {
@@ -18,36 +17,26 @@ interface Result {
   label: string;
 }
 
-// ── Grade / setup / decision logic ────────────────────────────
+// ── Pure logic ────────────────────────────────────────────────
 
 function isAligned(bias: Bias, rto: RTO): boolean {
   return (bias === "bull" && rto === "green") || (bias === "bear" && rto === "red");
 }
 
 function calculateGrade(sweep: boolean, rtoAlign: boolean, sessionStart: boolean, asia: boolean): string {
-  if (sweep && rtoAlign && sessionStart && asia) {
-    return "A+++ (Full Confluence: Sweep + RTO Align + Session Start + Asia)";
-  }
-  if (!sweep && rtoAlign && sessionStart && asia) {
-    return "A++ (Clean Continuation: RTO Align + Session + Asia)";
-  }
-  if (sweep && !rtoAlign && sessionStart) {
-    return "A+ (Stop Hunt Setup: Sweep + Session, wait for confirmation)";
-  }
-  return "bad (No Edge)";
+  if (sweep && rtoAlign && sessionStart && asia)  return "A+++";
+  if (!sweep && rtoAlign && sessionStart && asia) return "A++";
+  if (sweep && !rtoAlign && sessionStart)         return "A+";
+  return "bad";
 }
 
 function detectSetup(bias: Bias, rto: RTO, sweep: boolean): string {
   if (bias === "bull" && rto === "green") return "Bullish Continuation (BUY)";
-  if (bias === "bear" && rto === "red") return "Bearish Continuation (SELL)";
-
-  if (bias === "bull" && rto === "red") {
+  if (bias === "bear" && rto === "red")   return "Bearish Continuation (SELL)";
+  if (bias === "bull" && rto === "red")
     return sweep ? "Bullish Stop Hunt (BUY after sweep)" : "Potential Stop Hunt (wait for sweep)";
-  }
-  if (bias === "bear" && rto === "green") {
+  if (bias === "bear" && rto === "green")
     return sweep ? "Bearish Stop Hunt (SELL after sweep)" : "Potential Stop Hunt (wait for sweep)";
-  }
-
   return "No clear setup";
 }
 
@@ -62,30 +51,46 @@ function evaluate(
   if (!bias || !rto || !session) return null;
 
   const aligned = isAligned(bias, rto);
-  const grade = calculateGrade(sweep, aligned, sessionStart, asia);
-  const setup = detectSetup(bias, rto, sweep);
+  const grade   = calculateGrade(sweep, aligned, sessionStart, asia);
+  const setup   = detectSetup(bias, rto, sweep);
 
-  if (session === "no" || grade.startsWith("bad")) {
-    return { grade, setup, aligned, decision: "skip", label: "❌ SKIP" };
+  // ── Priority-ordered decision logic ──────────────────────────
+
+  // a. Out of session
+  if (session === "no") {
+    return { grade, setup, aligned, decision: "skip", label: "❌ SKIP (Out of session)" };
   }
 
+  // b. No edge
+  if (grade === "bad") {
+    return { grade, setup, aligned, decision: "skip", label: "❌ SKIP (No edge detected)" };
+  }
+
+  // c. Not aligned and no sweep yet
   if (!aligned && !sweep) {
-    return { grade, setup, aligned, decision: "wait", label: "⏳ WAIT" };
+    return { grade, setup, aligned, decision: "wait", label: "⏳ WAIT (Incomplete setup - wait for sweep)" };
   }
 
-  if (grade.startsWith("A+")) {
-    return { grade, setup, aligned, decision: "trade", label: "✅ TRADE" };
+  // d. Stop hunt forming — needs confirmation
+  if (grade === "A+") {
+    return { grade, setup, aligned, decision: "wait", label: "⏳ WAIT (Stop hunt forming - need confirmation)" };
   }
 
-  return { grade, setup, aligned, decision: "skip", label: "❌ SKIP" };
+  // e. Strong confluence — take the trade
+  if (grade === "A++" || grade === "A+++") {
+    return { grade, setup, aligned, decision: "trade", label: "✅ TRADE (Valid setup)" };
+  }
+
+  // f. Fallback
+  return { grade, setup, aligned, decision: "skip", label: "❌ SKIP (Low quality setup)" };
 }
 
 // ── Styling helpers ───────────────────────────────────────────
 
 const DECISION_STYLES: Record<Decision, string> = {
-  trade: "bg-green-600",
-  wait: "bg-yellow-500 text-black",
-  skip: "bg-red-600",
+  trade: "bg-green-600 text-white",
+  wait:  "bg-yellow-500 text-black",
+  skip:  "bg-red-600 text-white",
 };
 
 const selectClass =
@@ -94,16 +99,14 @@ const selectClass =
 // ── Component ─────────────────────────────────────────────────
 
 export default function TradingDecisionEngine() {
-  const [bias, setBias] = useState<Bias>("");
-  const [rto, setRto] = useState<RTO>("");
-  const [session, setSession] = useState<Session>("");
-
-  const [sweep, setSweep] = useState(false);
+  const [bias, setBias]               = useState<Bias>("");
+  const [rto, setRto]                 = useState<RTO>("");
+  const [session, setSession]         = useState<Session>("");
+  const [sweep, setSweep]             = useState(false);
   const [sessionStart, setSessionStart] = useState(false);
-  const [asia, setAsia] = useState(false);
-
-  const [result, setResult] = useState<Result | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [asia, setAsia]               = useState(false);
+  const [result, setResult]           = useState<Result | null>(null);
+  const [error, setError]             = useState<string | null>(null);
 
   function handleDecide() {
     setError(null);
@@ -129,7 +132,6 @@ export default function TradingDecisionEngine() {
             <option value="bear">Bearish</option>
           </select>
         </div>
-
         <div>
           <label className="text-sm text-slate-400">RTO</label>
           <select className={selectClass} value={rto} onChange={(e) => setRto(e.target.value as RTO)}>
@@ -138,7 +140,6 @@ export default function TradingDecisionEngine() {
             <option value="red">Red</option>
           </select>
         </div>
-
         <div>
           <label className="text-sm text-slate-400">Session Active?</label>
           <select className={selectClass} value={session} onChange={(e) => setSession(e.target.value as Session)}>
@@ -152,11 +153,11 @@ export default function TradingDecisionEngine() {
       {/* ── Entry components (checkboxes) ────────────────────── */}
       <h3 className="text-sm font-semibold text-slate-300 mt-6 mb-3">Entry Components</h3>
       <div className="space-y-2">
-        {[
+        {([
           { id: "sweep",        label: "Liquidity Sweep",        checked: sweep,        set: setSweep },
           { id: "sessionStart", label: "Session Start Momentum", checked: sessionStart, set: setSessionStart },
           { id: "asia",         label: "Asia Continuation",      checked: asia,         set: setAsia },
-        ].map(({ id, label, checked, set }) => (
+        ] as const).map(({ id, label, checked, set }) => (
           <label key={id} className="flex items-center gap-2 cursor-pointer text-sm">
             <input
               type="checkbox"
@@ -191,9 +192,7 @@ export default function TradingDecisionEngine() {
           <p className={`text-center font-semibold text-sm ${result.aligned ? "text-green-400" : "text-red-400"}`}>
             RTO Alignment: {result.aligned ? "✅ Aligned" : "❌ Not Aligned"}
           </p>
-          <div
-            className={`text-center font-bold py-3 rounded-xl ${DECISION_STYLES[result.decision]}`}
-          >
+          <div className={`text-center font-bold py-3 rounded-xl ${DECISION_STYLES[result.decision]}`}>
             {result.label}
           </div>
         </div>
@@ -201,4 +200,3 @@ export default function TradingDecisionEngine() {
     </div>
   );
 }
-

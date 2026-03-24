@@ -13,11 +13,16 @@ type Decision = "trade" | "wait" | "skip";
 interface Result {
   grade: string;
   setup: string;
+  aligned: boolean;
   decision: Decision;
   label: string;
 }
 
 // ── Grade / setup / decision logic ────────────────────────────
+
+function isAligned(bias: Bias, rto: RTO): boolean {
+  return (bias === "bull" && rto === "green") || (bias === "bear" && rto === "red");
+}
 
 function calculateGrade(sweep: boolean, rtoAlign: boolean, sessionStart: boolean, asia: boolean): string {
   if (sweep && rtoAlign && sessionStart && asia) {
@@ -51,30 +56,28 @@ function evaluate(
   rto: RTO,
   session: Session,
   sweep: boolean,
-  rtoAlign: boolean,
   sessionStart: boolean,
   asia: boolean,
 ): Result | null {
   if (!bias || !rto || !session) return null;
 
-  const grade = calculateGrade(sweep, rtoAlign, sessionStart, asia);
+  const aligned = isAligned(bias, rto);
+  const grade = calculateGrade(sweep, aligned, sessionStart, asia);
   const setup = detectSetup(bias, rto, sweep);
 
   if (session === "no" || grade.startsWith("bad")) {
-    return { grade, setup, decision: "skip", label: "❌ SKIP" };
+    return { grade, setup, aligned, decision: "skip", label: "❌ SKIP" };
   }
 
-  const aligned = (bias === "bull" && rto === "green") || (bias === "bear" && rto === "red");
-
   if (!aligned && !sweep) {
-    return { grade, setup, decision: "wait", label: "⏳ WAIT" };
+    return { grade, setup, aligned, decision: "wait", label: "⏳ WAIT" };
   }
 
   if (grade.startsWith("A+")) {
-    return { grade, setup, decision: "trade", label: "✅ TRADE" };
+    return { grade, setup, aligned, decision: "trade", label: "✅ TRADE" };
   }
 
-  return { grade, setup, decision: "skip", label: "❌ SKIP" };
+  return { grade, setup, aligned, decision: "skip", label: "❌ SKIP" };
 }
 
 // ── Styling helpers ───────────────────────────────────────────
@@ -96,7 +99,6 @@ export default function TradingDecisionEngine() {
   const [session, setSession] = useState<Session>("");
 
   const [sweep, setSweep] = useState(false);
-  const [rtoAlign, setRtoAlign] = useState(false);
   const [sessionStart, setSessionStart] = useState(false);
   const [asia, setAsia] = useState(false);
 
@@ -110,7 +112,7 @@ export default function TradingDecisionEngine() {
       setResult(null);
       return;
     }
-    setResult(evaluate(bias, rto, session, sweep, rtoAlign, sessionStart, asia));
+    setResult(evaluate(bias, rto, session, sweep, sessionStart, asia));
   }
 
   return (
@@ -151,10 +153,9 @@ export default function TradingDecisionEngine() {
       <h3 className="text-sm font-semibold text-slate-300 mt-6 mb-3">Entry Components</h3>
       <div className="space-y-2">
         {[
-          { id: "sweep", label: "Liquidity Sweep", checked: sweep, set: setSweep },
-          { id: "rtoAlign", label: "RTO aligned with Bias", checked: rtoAlign, set: setRtoAlign },
+          { id: "sweep",        label: "Liquidity Sweep",        checked: sweep,        set: setSweep },
           { id: "sessionStart", label: "Session Start Momentum", checked: sessionStart, set: setSessionStart },
-          { id: "asia", label: "Asia Continuation", checked: asia, set: setAsia },
+          { id: "asia",         label: "Asia Continuation",      checked: asia,         set: setAsia },
         ].map(({ id, label, checked, set }) => (
           <label key={id} className="flex items-center gap-2 cursor-pointer text-sm">
             <input
@@ -186,6 +187,9 @@ export default function TradingDecisionEngine() {
           </p>
           <p className="text-center font-semibold text-sm text-sky-400">
             Setup: {result.setup}
+          </p>
+          <p className={`text-center font-semibold text-sm ${result.aligned ? "text-green-400" : "text-red-400"}`}>
+            RTO Alignment: {result.aligned ? "✅ Aligned" : "❌ Not Aligned"}
           </p>
           <div
             className={`text-center font-bold py-3 rounded-xl ${DECISION_STYLES[result.decision]}`}

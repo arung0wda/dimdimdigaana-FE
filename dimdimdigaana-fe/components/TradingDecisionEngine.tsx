@@ -1,200 +1,211 @@
 "use client";
 
 import { useState } from "react";
-
-// ── Types ─────────────────────────────────────────────────────
-
-type Bias = "" | "bull" | "bear";
-type RTO = "" | "green" | "red";
-type Session = "" | "yes" | "no";
-type Decision = "trade" | "wait" | "skip";
-
-interface Result {
-  grade: string;
-  setup: string;
-  aligned: boolean;
-  decision: Decision;
-  label: string;
-}
-
-// ── Pure logic ────────────────────────────────────────────────
-
-function isAligned(bias: Bias, rto: RTO): boolean {
-  return (bias === "bull" && rto === "green") || (bias === "bear" && rto === "red");
-}
-
-function calculateGrade(sweep: boolean, rtoAlign: boolean, sessionStart: boolean, asia: boolean): string {
-  if (sweep && rtoAlign && sessionStart && asia)  return "A+++";
-  if (!sweep && rtoAlign && sessionStart && asia) return "A++";
-  if (sweep && !rtoAlign && sessionStart)         return "A+";
-  return "bad";
-}
-
-function detectSetup(bias: Bias, rto: RTO, sweep: boolean): string {
-  if (bias === "bull" && rto === "green") return "Bullish Continuation (BUY)";
-  if (bias === "bear" && rto === "red")   return "Bearish Continuation (SELL)";
-  if (bias === "bull" && rto === "red")
-    return sweep ? "Bullish Stop Hunt (BUY after sweep)" : "Potential Stop Hunt (wait for sweep)";
-  if (bias === "bear" && rto === "green")
-    return sweep ? "Bearish Stop Hunt (SELL after sweep)" : "Potential Stop Hunt (wait for sweep)";
-  return "No clear setup";
-}
-
-function evaluate(
-  bias: Bias,
-  rto: RTO,
-  session: Session,
-  sweep: boolean,
-  sessionStart: boolean,
-  asia: boolean,
-): Result | null {
-  if (!bias || !rto || !session) return null;
-
-  const aligned = isAligned(bias, rto);
-  const grade   = calculateGrade(sweep, aligned, sessionStart, asia);
-  const setup   = detectSetup(bias, rto, sweep);
-
-  // ── Priority-ordered decision logic ──────────────────────────
-
-  // a. Out of session
-  if (session === "no") {
-    return { grade, setup, aligned, decision: "skip", label: "❌ SKIP (Out of session)" };
-  }
-
-  // b. No edge
-  if (grade === "bad") {
-    return { grade, setup, aligned, decision: "skip", label: "❌ SKIP (No edge detected)" };
-  }
-
-  // c. Not aligned and no sweep yet
-  if (!aligned && !sweep) {
-    return { grade, setup, aligned, decision: "wait", label: "⏳ WAIT (Incomplete setup - wait for sweep)" };
-  }
-
-  // d. Stop hunt forming — needs confirmation
-  if (grade === "A+") {
-    return { grade, setup, aligned, decision: "wait", label: "⏳ WAIT (Stop hunt forming - need confirmation)" };
-  }
-
-  // e. Strong confluence — take the trade
-  if (grade === "A++" || grade === "A+++") {
-    return { grade, setup, aligned, decision: "trade", label: "✅ TRADE (Valid setup)" };
-  }
-
-  // f. Fallback
-  return { grade, setup, aligned, decision: "skip", label: "❌ SKIP (Low quality setup)" };
-}
+import {
+  type Bias,
+  type RTO,
+  type SessionState,
+  type Session,
+  type TradePlan,
+  useTradePlan,
+} from "@/lib/tradePlan";
 
 // ── Styling helpers ───────────────────────────────────────────
-
-const DECISION_STYLES: Record<Decision, string> = {
-  trade: "bg-green-600 text-white",
-  wait:  "bg-yellow-500 text-black",
-  skip:  "bg-red-600 text-white",
-};
 
 const selectClass =
   "w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 mt-1 focus:outline-none focus:ring-2 focus:ring-indigo-500";
 
+function tradeColor(trade: TradePlan["trade"]): string {
+  if (trade === "BUY") return "bg-green-600 text-white";
+  if (trade === "SELL") return "bg-red-600 text-white";
+  return "bg-slate-600 text-white";
+}
+
+function confidenceBadge(c: TradePlan["confidence"]): string {
+  if (c === "A+++") return "bg-green-900 text-green-300";
+  if (c === "A++") return "bg-yellow-900 text-yellow-300";
+  return "bg-orange-900 text-orange-300";
+}
+
+function setupLabel(s: TradePlan["setup"]): string {
+  const map: Record<TradePlan["setup"], string> = {
+    continuation: "Continuation",
+    stop_hunt: "Stop Hunt",
+    intraday: "Intraday (Bias Neutral)",
+    anticipation: "Anticipation (RTO Neutral)",
+    none: "No Setup",
+  };
+  return map[s];
+}
+
 // ── Component ─────────────────────────────────────────────────
 
 export default function TradingDecisionEngine() {
-  const [bias, setBias]               = useState<Bias>("");
-  const [rto, setRto]                 = useState<RTO>("");
-  const [session, setSession]         = useState<Session>("");
-  const [sweep, setSweep]             = useState(false);
-  const [sessionStart, setSessionStart] = useState(false);
-  const [asia, setAsia]               = useState(false);
-  const [result, setResult]           = useState<Result | null>(null);
-  const [error, setError]             = useState<string | null>(null);
+  const [bias, setBias] = useState<Bias | "">("");
+  const [rto, setRto] = useState<RTO | "">("");
+  const [asia, setAsia] = useState<SessionState | "">("");
+  const [london, setLondon] = useState<SessionState | "">("");
+  const [session, setSession] = useState<Session | "">("");
+
+  const { plan, error, compute, reset } = useTradePlan();
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  const showLondon = session === "newyork";
 
   function handleDecide() {
-    setError(null);
-    if (!bias || !rto || !session) {
-      setError("Please fill all required fields.");
-      setResult(null);
+    setValidationError(null);
+
+    if (!bias || !rto || !asia || !session) {
+      setValidationError("Please fill all required fields.");
+      reset();
       return;
     }
-    setResult(evaluate(bias, rto, session, sweep, sessionStart, asia));
+
+    if (session === "newyork" && !london) {
+      setValidationError("London session state is required for New York session.");
+      reset();
+      return;
+    }
+
+    compute({
+      bias,
+      rto,
+      asia,
+      london: session === "newyork" ? (london as SessionState) : undefined,
+      session,
+    });
+  }
+
+  function handleReset() {
+    setBias("");
+    setRto("");
+    setAsia("");
+    setLondon("");
+    setSession("");
+    setValidationError(null);
+    reset();
   }
 
   return (
     <div className="bg-slate-900 p-6 rounded-xl shadow-lg max-w-2xl mx-auto">
-      <h2 className="text-lg font-semibold mb-6">🧠 Trading Decision Engine</h2>
+      <h2 className="text-lg font-semibold mb-6">🧠 Trading Decision Engine v2</h2>
 
-      {/* ── Selects ──────────────────────────────────────────── */}
+      {/* ── Inputs ─────────────────────────────────────────── */}
       <div className="space-y-4">
+        {/* 4H Bias */}
         <div>
           <label className="text-sm text-slate-400">4H Bias</label>
-          <select className={selectClass} value={bias} onChange={(e) => setBias(e.target.value as Bias)}>
+          <select className={selectClass} value={bias} onChange={(e) => setBias(e.target.value as Bias | "")}>
             <option value="">Select</option>
-            <option value="bull">Bullish</option>
-            <option value="bear">Bearish</option>
+            <option value="bullish">Bullish</option>
+            <option value="bearish">Bearish</option>
+            <option value="neutral">Neutral</option>
           </select>
         </div>
+
+        {/* RTO */}
         <div>
-          <label className="text-sm text-slate-400">RTO</label>
-          <select className={selectClass} value={rto} onChange={(e) => setRto(e.target.value as RTO)}>
+          <label className="text-sm text-slate-400">RTO (Reference to Open)</label>
+          <select className={selectClass} value={rto} onChange={(e) => setRto(e.target.value as RTO | "")}>
             <option value="">Select</option>
-            <option value="green">Green</option>
-            <option value="red">Red</option>
+            <option value="bullish">Bullish</option>
+            <option value="bearish">Bearish</option>
+            <option value="neutral">Neutral</option>
           </select>
         </div>
+
+        {/* Asia */}
         <div>
-          <label className="text-sm text-slate-400">Session Active?</label>
-          <select className={selectClass} value={session} onChange={(e) => setSession(e.target.value as Session)}>
+          <label className="text-sm text-slate-400">Asia Session</label>
+          <select className={selectClass} value={asia} onChange={(e) => setAsia(e.target.value as SessionState | "")}>
             <option value="">Select</option>
-            <option value="yes">Yes</option>
-            <option value="no">No</option>
+            <option value="bullish">Bullish</option>
+            <option value="bearish">Bearish</option>
+            <option value="neutral">Neutral</option>
           </select>
         </div>
-      </div>
 
-      {/* ── Entry components (checkboxes) ────────────────────── */}
-      <h3 className="text-sm font-semibold text-slate-300 mt-6 mb-3">Entry Components</h3>
-      <div className="space-y-2">
-        {([
-          { id: "sweep",        label: "Liquidity Sweep",        checked: sweep,        set: setSweep },
-          { id: "sessionStart", label: "Session Start Momentum", checked: sessionStart, set: setSessionStart },
-          { id: "asia",         label: "Asia Continuation",      checked: asia,         set: setAsia },
-        ] as const).map(({ id, label, checked, set }) => (
-          <label key={id} className="flex items-center gap-2 cursor-pointer text-sm">
-            <input
-              type="checkbox"
-              checked={checked}
-              onChange={(e) => set(e.target.checked)}
-              className="accent-indigo-500 h-4 w-4"
-            />
-            {label}
-          </label>
-        ))}
-      </div>
+        {/* Session */}
+        <div>
+          <label className="text-sm text-slate-400">Current Session</label>
+          <select className={selectClass} value={session} onChange={(e) => { setSession(e.target.value as Session | ""); if (e.target.value !== "newyork") setLondon(""); }}>
+            <option value="">Select</option>
+            <option value="london">London</option>
+            <option value="newyork">New York</option>
+          </select>
+        </div>
 
-      {/* ── Action ───────────────────────────────────────────── */}
-      <button
-        onClick={handleDecide}
-        className="mt-6 w-full bg-green-600 hover:bg-green-500 text-black font-bold py-2.5 rounded-lg transition-colors"
-      >
-        Get Decision
-      </button>
-
-      {error && <p className="mt-4 text-sm text-red-400 text-center">{error}</p>}
-
-      {/* ── Result ───────────────────────────────────────────── */}
-      {result && (
-        <div className="mt-6 space-y-3">
-          <p className="text-center font-semibold text-sm text-slate-300">
-            Entry Grade: {result.grade}
-          </p>
-          <p className="text-center font-semibold text-sm text-sky-400">
-            Setup: {result.setup}
-          </p>
-          <p className={`text-center font-semibold text-sm ${result.aligned ? "text-green-400" : "text-red-400"}`}>
-            RTO Alignment: {result.aligned ? "✅ Aligned" : "❌ Not Aligned"}
-          </p>
-          <div className={`text-center font-bold py-3 rounded-xl ${DECISION_STYLES[result.decision]}`}>
-            {result.label}
+        {/* London (conditional) */}
+        {showLondon && (
+          <div>
+            <label className="text-sm text-slate-400">London Session</label>
+            <select className={selectClass} value={london} onChange={(e) => setLondon(e.target.value as SessionState | "")}>
+              <option value="">Select</option>
+              <option value="bullish">Bullish</option>
+              <option value="bearish">Bearish</option>
+              <option value="neutral">Neutral</option>
+            </select>
           </div>
+        )}
+      </div>
+
+      {/* ── Actions ────────────────────────────────────────── */}
+      <div className="flex gap-3 mt-6">
+        <button
+          onClick={handleDecide}
+          className="flex-1 bg-green-600 hover:bg-green-500 text-black font-bold py-2.5 rounded-lg transition-colors"
+        >
+          Get Trade Plan
+        </button>
+        <button
+          onClick={handleReset}
+          className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2.5 rounded-lg transition-colors"
+        >
+          Reset
+        </button>
+      </div>
+
+      {/* ── Errors ─────────────────────────────────────────── */}
+      {(validationError || error) && (
+        <p className="mt-4 text-sm text-red-400 text-center">{validationError || error}</p>
+      )}
+
+      {/* ── Result ─────────────────────────────────────────── */}
+      {plan && (
+        <div className="mt-6 space-y-4">
+          {/* Trade action pill */}
+          <div className={`text-center font-bold text-xl py-4 rounded-xl ${tradeColor(plan.trade)}`}>
+            {plan.trade === "BUY" && "🟢 "}
+            {plan.trade === "SELL" && "🔴 "}
+            {plan.trade === "NO TRADE" && "⚪ "}
+            {plan.trade}
+          </div>
+
+          {/* Meta row */}
+          <div className="flex items-center justify-center gap-3 flex-wrap">
+            <span className={`text-xs font-bold px-3 py-1 rounded-full ${confidenceBadge(plan.confidence)}`}>
+              {plan.confidence}
+            </span>
+            <span className="text-xs font-semibold text-sky-400 bg-sky-900/40 px-3 py-1 rounded-full">
+              {setupLabel(plan.setup)}
+            </span>
+            <span className="text-xs text-slate-400">
+              Score: {plan.score}
+            </span>
+          </div>
+
+          {/* Notes */}
+          {plan.notes.length > 0 && (
+            <div className="bg-slate-800/60 rounded-lg p-4 space-y-1.5">
+              <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Notes</h4>
+              {plan.notes.map((note, i) => (
+                <p key={i} className="text-sm text-slate-300 flex items-start gap-2">
+                  <span className="text-indigo-400 mt-px shrink-0">•</span>
+                  {note}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

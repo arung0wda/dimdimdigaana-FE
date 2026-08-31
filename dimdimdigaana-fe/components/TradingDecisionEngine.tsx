@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   type Bias,
   type RTO,
@@ -29,15 +29,26 @@ const fieldHelpText = {
 } as const;
 
 function FieldHelp({ text }: Readonly<{ text: string }>) {
+  const tooltipId = useId();
+
   return (
-    <button
-      type="button"
-      className="ml-2 inline-flex cursor-help items-center text-xs font-medium text-slate-500 transition-colors hover:text-slate-300"
-      title={text}
-      aria-label={text}
-    >
-      (i)
-    </button>
+    <span className="relative ml-2 inline-flex items-center group">
+      <button
+        type="button"
+        className="inline-flex cursor-help items-center text-xs font-medium text-slate-500 transition-colors hover:text-slate-300 focus:text-slate-300"
+        aria-label={text}
+        aria-describedby={tooltipId}
+      >
+        (i)
+      </button>
+      <span
+        id={tooltipId}
+        role="tooltip"
+        className="pointer-events-none absolute left-0 top-full z-10 mt-1 w-72 rounded-md border border-slate-700 bg-slate-950 px-3 py-2 text-left text-xs leading-relaxed text-slate-200 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+      >
+        {text}
+      </span>
+    </span>
   );
 }
 

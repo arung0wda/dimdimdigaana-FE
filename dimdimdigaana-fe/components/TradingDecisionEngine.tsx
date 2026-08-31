@@ -28,17 +28,16 @@ const fieldHelpText = {
     "Only used for New York trades. Mark whether London continued bullish, continued bearish, or stayed neutral before New York opened.",
 } as const;
 
-function FieldHelp({ text }: { text: string }) {
+function FieldHelp({ text }: Readonly<{ text: string }>) {
   return (
-    <span
-      className="mt-2 inline-flex cursor-help items-center gap-1 text-xs text-slate-500"
+    <button
+      type="button"
+      className="ml-2 inline-flex cursor-help items-center text-xs font-medium text-slate-500 transition-colors hover:text-slate-300"
       title={text}
       aria-label={text}
-      tabIndex={0}
     >
-      <span className="text-sm leading-none text-slate-400">i</span>
-      Hover for help
-    </span>
+      (i)
+    </button>
   );
 }
 
@@ -121,62 +120,72 @@ export default function TradingDecisionEngine() {
       <div className="space-y-4">
         {/* 4H Bias */}
         <div>
-          <label className="text-sm text-slate-400">4H Bias</label>
-          <select className={selectClass} value={bias} onChange={(e) => setBias(e.target.value as Bias | "")}>
+          <div className="flex items-center">
+            <label htmlFor="bias" className="text-sm text-slate-400">4H Bias</label>
+            <FieldHelp text={fieldHelpText.bias} />
+          </div>
+          <select id="bias" className={selectClass} value={bias} onChange={(e) => setBias(e.target.value as Bias | "")}>
             <option value="">Select</option>
             <option value="bullish">Bullish</option>
             <option value="bearish">Bearish</option>
             <option value="neutral">Neutral</option>
           </select>
-          <FieldHelp text={fieldHelpText.bias} />
         </div>
 
         {/* RTO */}
         <div>
-          <label className="text-sm text-slate-400">RTO (Reference to Open)</label>
-          <select className={selectClass} value={rto} onChange={(e) => setRto(e.target.value as RTO | "")}>
+          <div className="flex items-center">
+            <label htmlFor="rto" className="text-sm text-slate-400">RTO (Reference to Open)</label>
+            <FieldHelp text={fieldHelpText.rto} />
+          </div>
+          <select id="rto" className={selectClass} value={rto} onChange={(e) => setRto(e.target.value as RTO | "")}>
             <option value="">Select</option>
             <option value="bullish">Bullish</option>
             <option value="bearish">Bearish</option>
             <option value="neutral">Neutral</option>
           </select>
-          <FieldHelp text={fieldHelpText.rto} />
         </div>
 
         {/* Asia */}
         <div>
-          <label className="text-sm text-slate-400">Asia Session</label>
-          <select className={selectClass} value={asia} onChange={(e) => setAsia(e.target.value as SessionState | "")}>
+          <div className="flex items-center">
+            <label htmlFor="asia" className="text-sm text-slate-400">Asia Session</label>
+            <FieldHelp text={fieldHelpText.asia} />
+          </div>
+          <select id="asia" className={selectClass} value={asia} onChange={(e) => setAsia(e.target.value as SessionState | "")}>
             <option value="">Select</option>
             <option value="bullish">Bullish</option>
             <option value="bearish">Bearish</option>
             <option value="neutral">Neutral</option>
           </select>
-          <FieldHelp text={fieldHelpText.asia} />
         </div>
 
         {/* Session */}
         <div>
-          <label className="text-sm text-slate-400">Current Session</label>
-          <select className={selectClass} value={session} onChange={(e) => { setSession(e.target.value as Session | ""); if (e.target.value !== "newyork") setLondon(""); }}>
+          <div className="flex items-center">
+            <label htmlFor="session" className="text-sm text-slate-400">Current Session</label>
+            <FieldHelp text={fieldHelpText.session} />
+          </div>
+          <select id="session" className={selectClass} value={session} onChange={(e) => { setSession(e.target.value as Session | ""); if (e.target.value !== "newyork") setLondon(""); }}>
             <option value="">Select</option>
             <option value="london">London</option>
             <option value="newyork">New York</option>
           </select>
-          <FieldHelp text={fieldHelpText.session} />
         </div>
 
         {/* London (conditional) */}
         {showLondon && (
           <div>
-            <label className="text-sm text-slate-400">London Session</label>
-            <select className={selectClass} value={london} onChange={(e) => setLondon(e.target.value as SessionState | "")}>
+            <div className="flex items-center">
+              <label htmlFor="london" className="text-sm text-slate-400">London Session</label>
+              <FieldHelp text={fieldHelpText.london} />
+            </div>
+            <select id="london" className={selectClass} value={london} onChange={(e) => setLondon(e.target.value as SessionState | "")}>
               <option value="">Select</option>
               <option value="bullish">Bullish</option>
               <option value="bearish">Bearish</option>
               <option value="neutral">Neutral</option>
             </select>
-            <FieldHelp text={fieldHelpText.london} />
           </div>
         )}
       </div>
@@ -184,12 +193,14 @@ export default function TradingDecisionEngine() {
       {/* ── Actions ────────────────────────────────────────── */}
       <div className="flex gap-3 mt-6">
         <button
+          type="button"
           onClick={handleDecide}
           className="flex-1 bg-green-600 hover:bg-green-500 text-black font-bold py-2.5 rounded-lg transition-colors"
         >
           Get Trade Plan
         </button>
         <button
+          type="button"
           onClick={handleReset}
           className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2.5 rounded-lg transition-colors"
         >
@@ -230,8 +241,8 @@ export default function TradingDecisionEngine() {
           {plan.notes.length > 0 && (
             <div className="bg-slate-800/60 rounded-lg p-4 space-y-1.5">
               <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Notes</h4>
-              {plan.notes.map((note, i) => (
-                <p key={i} className="text-sm text-slate-300 flex items-start gap-2">
+              {plan.notes.map((note) => (
+                <p key={note} className="text-sm text-slate-300 flex items-start gap-2">
                   <span className="text-indigo-400 mt-px shrink-0">•</span>
                   {note}
                 </p>

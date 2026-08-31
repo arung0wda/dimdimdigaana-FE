@@ -15,6 +15,33 @@ import {
 const selectClass =
   "w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2.5 mt-1 focus:outline-none focus:ring-2 focus:ring-indigo-500";
 
+const fieldHelpText = {
+  bias:
+    "Switch to 4h time frame. On a downtrend, If the price is closed above previous Swing high(resistance), it is bullish. vice versa for Bearish",
+  rto:
+    "Reference price action to the open. If price is accepting above the open, treat it as bullish. If it is accepting below the open, treat it as bearish. Use neutral when there is no clear directional intent.",
+  asia:
+    "Mark how the Asia session behaved. Choose bullish or bearish when Asia clearly expanded in one direction. Choose neutral when Asia stayed in a range or lacked direction.",
+  session:
+    "Choose the session you are currently planning to trade. Select New York only when you also want London session behavior included in the decision.",
+  london:
+    "Only used for New York trades. Mark whether London continued bullish, continued bearish, or stayed neutral before New York opened.",
+} as const;
+
+function FieldHelp({ text }: { text: string }) {
+  return (
+    <span
+      className="mt-2 inline-flex cursor-help items-center gap-1 text-xs text-slate-500"
+      title={text}
+      aria-label={text}
+      tabIndex={0}
+    >
+      <span className="text-sm leading-none text-slate-400">i</span>
+      Hover for help
+    </span>
+  );
+}
+
 function tradeColor(trade: TradePlan["trade"]): string {
   if (trade === "BUY") return "bg-green-600 text-white";
   if (trade === "SELL") return "bg-red-600 text-white";
@@ -101,6 +128,7 @@ export default function TradingDecisionEngine() {
             <option value="bearish">Bearish</option>
             <option value="neutral">Neutral</option>
           </select>
+          <FieldHelp text={fieldHelpText.bias} />
         </div>
 
         {/* RTO */}
@@ -112,6 +140,7 @@ export default function TradingDecisionEngine() {
             <option value="bearish">Bearish</option>
             <option value="neutral">Neutral</option>
           </select>
+          <FieldHelp text={fieldHelpText.rto} />
         </div>
 
         {/* Asia */}
@@ -123,6 +152,7 @@ export default function TradingDecisionEngine() {
             <option value="bearish">Bearish</option>
             <option value="neutral">Neutral</option>
           </select>
+          <FieldHelp text={fieldHelpText.asia} />
         </div>
 
         {/* Session */}
@@ -133,6 +163,7 @@ export default function TradingDecisionEngine() {
             <option value="london">London</option>
             <option value="newyork">New York</option>
           </select>
+          <FieldHelp text={fieldHelpText.session} />
         </div>
 
         {/* London (conditional) */}
@@ -145,6 +176,7 @@ export default function TradingDecisionEngine() {
               <option value="bearish">Bearish</option>
               <option value="neutral">Neutral</option>
             </select>
+            <FieldHelp text={fieldHelpText.london} />
           </div>
         )}
       </div>
